@@ -162,3 +162,51 @@ export const dispatchApi = {
   updateStatus: (id, data) => api.put(`/dispatch/${id}/status`, data),
 };
 
+// ── Roles & Permissions ───────────────────────────────────────
+export const roleApi = {
+  getAll: (companyId) => api.get('/roles', { params: companyId ? { companyId } : {} }),
+  create: (data) => api.post('/roles', data),
+  update: (id, data) => api.put(`/roles/${id}`, data),
+  delete: (id) => api.delete(`/roles/${id}`),
+  getSystemPermissions: () => api.get('/roles/permissions'),
+};
+
+// ── Tax Master ────────────────────────────────────────────────
+export const taxApi = {
+  // HSN Codes
+  getHsnCodes: (companyId) => api.get('/taxes/hsn', { params: companyId ? { companyId } : {} }),
+  createHsnCode: (data) => api.post('/taxes/hsn', data),
+  updateHsnCode: (id, data) => api.put(`/taxes/hsn/${id}`, data),
+  deleteHsnCode: (id) => api.delete(`/taxes/hsn/${id}`),
+  // GST Slabs
+  getGstSlabs: (companyId) => api.get('/taxes/gst', { params: companyId ? { companyId } : {} }),
+  createGstSlab: (data) => api.post('/taxes/gst', data),
+  updateGstSlab: (id, data) => api.put(`/taxes/gst/${id}`, data),
+  deleteGstSlab: (id) => api.delete(`/taxes/gst/${id}`),
+};
+
+// ── Module 1 ──────────────────────────────────────────────────
+export const m1Api = {
+  // Inventory Dashboard
+  getDashboardStats: (params) => api.get('/m1/dashboard', { params }),
+  // Low Stock Engine
+  getLowStock: (params) => api.get('/m1/low-stock', { params }),
+  // Batch Expiry Engine
+  getBatchExpiry: (params) => api.get('/m1/batch-expiry', { params }),
+  // Notifications
+  getNotifications: (params) => api.get('/m1/notifications', { params }),
+  markNotificationRead: (id) => api.patch(`/m1/notifications/${id}/read`),
+  markAllRead: () => api.patch('/m1/notifications/mark-all-read'),
+  // Barcode Bulk Print
+  getBulkBarcodes: (data) => api.post('/m1/barcode/bulk', data),
+  // Stock History (enhanced)
+  getStockHistory: (params) => api.get('/m1/history', { params }),
+  // Stock Adjustments
+  createAdjustment: (data) => api.post('/m1/adjustments', data),
+  getAdjustments: (params) => api.get('/m1/adjustments', { params }),
+};
+
+// Auth Extended
+export const authExtApi = {
+  changePassword: (data) => api.post('/auth/change-password', data),
+};

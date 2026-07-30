@@ -44,7 +44,8 @@ export default function POS() {
       }
 
       const prodRes = await productApi.getAll();
-      setProducts(prodRes.data.data);
+      const pData = prodRes.data?.data;
+      setProducts(Array.isArray(pData) ? pData : (pData?.products || []));
     } catch { /* ignore */ }
   };
 

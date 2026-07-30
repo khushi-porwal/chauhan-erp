@@ -56,7 +56,8 @@ export default function Dispatch() {
         warehouseApi.getAll(companyId),
         customerApi.getAll(companyId),
       ]);
-      setProducts(prodRes.data.data || []);
+      const pData = prodRes.data?.data;
+      setProducts(Array.isArray(pData) ? pData : (pData?.products || []));
       setWarehouses((whRes.data.data || []).filter(w => w.status === 'ACTIVE'));
       setCustomers(custRes.data.data || []);
     } catch { /* ignore */ }

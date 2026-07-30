@@ -44,7 +44,8 @@ export default function Sales() {
       const custRes = await customerApi.getAll();
       setCustomers(custRes.data.data);
       const prodRes = await productApi.getAll();
-      setProducts(prodRes.data.data);
+      const pData = prodRes.data?.data;
+      setProducts(Array.isArray(pData) ? pData : (pData?.products || []));
       const whRes = await warehouseApi.getAll();
       setWarehouses(whRes.data.data.filter(w => w.status === 'ACTIVE'));
 

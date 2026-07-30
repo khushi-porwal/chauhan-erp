@@ -5,7 +5,7 @@ import { logAudit } from '../utils/auditLogger.js';
 
 export const createWarehouse = async (req, res, next) => {
   try {
-    const { name, code, address, branchId, companyId } = req.body;
+    const { name, code, address, branchId, managerName, managerPhone, warehouseType, companyId } = req.body;
     const targetCompanyId = req.user.role === 'SUPER_ADMIN' ? companyId : req.user.companyId;
 
     if (!targetCompanyId) {
@@ -31,6 +31,9 @@ export const createWarehouse = async (req, res, next) => {
         code: code.toUpperCase().trim(),
         address,
         branchId: branchId || null,
+        managerName: managerName || null,
+        managerPhone: managerPhone || null,
+        warehouseType: warehouseType || 'CENTRAL',
         companyId: targetCompanyId
       }
     });
@@ -77,7 +80,7 @@ export const getWarehouses = async (req, res, next) => {
 export const updateWarehouse = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, address, branchId, status } = req.body;
+    const { name, address, branchId, managerName, managerPhone, warehouseType, status } = req.body;
 
     const warehouse = await prisma.warehouse.findUnique({ where: { id } });
     if (!warehouse) {
@@ -94,6 +97,9 @@ export const updateWarehouse = async (req, res, next) => {
         name,
         address,
         branchId: branchId !== undefined ? (branchId || null) : undefined,
+        managerName: managerName !== undefined ? managerName : undefined,
+        managerPhone: managerPhone !== undefined ? managerPhone : undefined,
+        warehouseType: warehouseType || undefined,
         status
       }
     });

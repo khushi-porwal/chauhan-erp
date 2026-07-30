@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Building2, Users, ClipboardList,
   Settings, LogOut, ChevronLeft, ChevronRight, GitBranch, Calendar,
   Contact, Truck, Package, Warehouse, Boxes, ShoppingCart, ShoppingBag,
-  Receipt, DollarSign, BarChart3, Shield
+  Receipt, DollarSign, BarChart3, Shield, AlertTriangle, Layers, Barcode, FileText, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import toast from 'react-hot-toast';
@@ -105,6 +105,34 @@ const NAV_SECTIONS = [
         allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN', 'BRANCH_MANAGER'],
         permission: 'inventory',
       },
+      {
+        to: '/low-stock',
+        icon: AlertTriangle,
+        label: 'Low Stock Alerts',
+        allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN', 'BRANCH_MANAGER'],
+        permission: 'inventory',
+      },
+      {
+        to: '/batch-expiry',
+        icon: Layers,
+        label: 'Batch & Expiry',
+        allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN', 'BRANCH_MANAGER'],
+        permission: 'batch.manage',
+      },
+      {
+        to: '/barcode-print',
+        icon: Barcode,
+        label: 'Barcode Print',
+        allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN', 'BRANCH_MANAGER'],
+        permission: 'barcode.print',
+      },
+      {
+        to: '/tax-master',
+        icon: FileText,
+        label: 'Tax Master',
+        allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN'],
+        permission: 'taxes.manage',
+      },
     ],
   },
   {
@@ -156,6 +184,13 @@ const NAV_SECTIONS = [
         label: 'Users',
         allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN'],
         permission: null, // admin only
+      },
+      {
+        to: '/roles',
+        icon: ShieldCheck,
+        label: 'Roles & Permissions',
+        allowedRoles: ['SUPER_ADMIN', 'COMPANY_ADMIN'],
+        permission: 'roles.manage',
       },
     ],
   },

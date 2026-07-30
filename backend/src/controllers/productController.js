@@ -351,7 +351,9 @@ export const createProduct = async (req, res, next) => {
   try {
     const {
       name, sku, barcode, description, categoryId, brandId, unitId,
-      hsnCode, gstRate, purchasePrice, salesPrice, openingStock, lowStockThreshold, companyId
+      hsnCode, hsnCodeId, gstRate, gstSlabId, purchasePrice, salesPrice,
+      mrp, minPrice, openingStock, openingValue, lowStockThreshold,
+      status, images, companyId
     } = req.body;
 
     const targetCompanyId = req.user.role === 'SUPER_ADMIN' ? companyId : req.user.companyId;
@@ -359,22 +361,75 @@ export const createProduct = async (req, res, next) => {
       throw new BadRequestError('Company ID is required');
     }
 
+    if (!name) throw new BadRequestError('Product name is required');
+
+    // Check SKU Uniqueness per company
+    if (sku) {
+      const existingSku = await prisma.product.findFirst({
+        where: { sku, companyId: targetCompanyId, isDeleted: false }
+      });
+      if (existingSku) {
+        throw new BadRequestError(`Product with SKU '${sku}' already exists.`);
+      }
+    }
+
+    // Check Barcode Uniqueness per company
+    if (barcode) {
+      const existingBarcode = await prisma.product.findFirst({
+        where: { barcode, companyId: targetCompanyId, isDeleted: false }
+      });
+      if (existingBarcode) {
+        throw new BadRequestError(`Product with Barcode '${barcode}' already exists.`);
+      }
+    }
+
     const pPrice = purchasePrice ? parseFloat(purchasePrice) : 0;
     const sPrice = salesPrice ? parseFloat(salesPrice) : 0;
+    const mrpVal = mrp ? parseFloat(mrp) : sPrice;
+    const minP = minPrice ? parseFloat(minPrice) : 0;
     const stock = openingStock ? parseFloat(openingStock) : 0;
+    const openVal = openingValue ? parseFloat(openingValue) : (stock * pPrice);
     const gst = gstRate ? parseFloat(gstRate) : 0;
     const threshold = lowStockThreshold ? parseFloat(lowStockThreshold) : 0;
 
     const product = await prisma.product.create({
       data: {
-        name, sku, barcode, description,
+        name,
+        sku: sku || null,
+        barcode: barcode || null,
+        description,
         categoryId: categoryId || null,
         brandId: brandId || null,
         unitId: unitId || null,
-        hsnCode, gstRate: gst, purchasePrice: pPrice, salesPrice: sPrice,
-        openingStock: stock, currentStock: stock,
+        hsnCode,
+        hsnCodeId: hsnCodeId || null,
+        gstRate: gst,
+        gstSlabId: gstSlabId || null,
+        purchasePrice: pPrice,
+        salesPrice: sPrice,
+        mrp: mrpVal,
+        minPrice: minP,
+        openingStock: stock,
+        openingValue: openVal,
+        currentStock: stock,
         lowStockThreshold: threshold,
-        companyId: targetCompanyId
+        status: status || 'ACTIVE',
+        isDeleted: false,
+        companyId: targetCompanyId,
+        images: Array.isArray(images) && images.length > 0 ? {
+          create: images.map((img, idx) => ({
+            url: typeof img === 'string' ? img : img.url,
+            isPrimary: idx === 0
+          }))
+        } : undefined
+      },
+      include: {
+        category: true,
+        brand: true,
+        unit: true,
+        images: true,
+        hsnCodeRef: true,
+        gstSlab: true
       }
     });
 
@@ -401,18 +456,59 @@ export const getProducts = async (req, res, next) => {
       throw new ForbiddenError('You are not associated with any company');
     }
 
+    const {
+      search, categoryId, brandId, status, lowStock,
+      page = 1, limit = 50, sortBy = 'name', sortOrder = 'asc'
+    } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where = {
+      isDeleted: false,
+      ...(companyId ? { companyId } : {}),
+      ...(categoryId ? { categoryId } : {}),
+      ...(brandId ? { brandId } : {}),
+      ...(status ? { status } : {}),
+      ...(search ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { sku: { contains: search, mode: 'insensitive' } },
+          { barcode: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ]
+      } : {}),
+    };
+
+    const total = await prisma.product.count({ where });
+
     const products = await prisma.product.findMany({
-      where: companyId ? { companyId } : {},
+      where,
       include: {
         category: { select: { id: true, name: true } },
         brand: { select: { id: true, name: true } },
         unit: { select: { id: true, name: true } },
-        variants: { select: { id: true, name: true, sku: true, price: true, stock: true } }
+        images: true,
+        variants: { select: { id: true, name: true, sku: true, price: true, stock: true } },
+        hsnCodeRef: { select: { id: true, code: true, gstRate: true } },
+        gstSlab: { select: { id: true, name: true, rate: true } },
+        _count: { select: { stocks: true } }
       },
-      orderBy: { name: 'asc' }
+      orderBy: { [sortBy]: sortOrder.toLowerCase() },
+      skip,
+      take: limitNum
     });
 
-    return successResponse(res, 'Products retrieved successfully', products);
+    return successResponse(res, 'Products retrieved successfully', {
+      products,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -425,9 +521,9 @@ export const lookupByBarcode = async (req, res, next) => {
 
     if (!code) throw new BadRequestError('Barcode is required');
 
-    // Search product by barcode or SKU
     const product = await prisma.product.findFirst({
       where: {
+        isDeleted: false,
         ...(companyId ? { companyId } : {}),
         OR: [
           { barcode: code },
@@ -438,6 +534,7 @@ export const lookupByBarcode = async (req, res, next) => {
         category: { select: { id: true, name: true } },
         brand: { select: { id: true, name: true } },
         unit: { select: { id: true, name: true } },
+        images: true,
         variants: true,
         stocks: { include: { warehouse: { select: { id: true, name: true } } } },
       },
@@ -458,28 +555,65 @@ export const updateProduct = async (req, res, next) => {
     const { id } = req.params;
     const {
       name, sku, barcode, description, categoryId, brandId, unitId,
-      hsnCode, gstRate, purchasePrice, salesPrice, lowStockThreshold
+      hsnCode, hsnCodeId, gstRate, gstSlabId, purchasePrice, salesPrice,
+      mrp, minPrice, lowStockThreshold, status, images
     } = req.body;
 
     const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundError('Product not found');
+    if (!product || product.isDeleted) throw new NotFoundError('Product not found');
 
     if (req.user.role !== 'SUPER_ADMIN' && product.companyId !== req.user.companyId) {
       throw new ForbiddenError('You do not have access to this product');
     }
 
+    // Check SKU uniqueness
+    if (sku && sku !== product.sku) {
+      const existingSku = await prisma.product.findFirst({
+        where: { sku, companyId: product.companyId, isDeleted: false, NOT: { id } }
+      });
+      if (existingSku) {
+        throw new BadRequestError(`Product with SKU '${sku}' already exists.`);
+      }
+    }
+
+    // Check Barcode uniqueness
+    if (barcode && barcode !== product.barcode) {
+      const existingBarcode = await prisma.product.findFirst({
+        where: { barcode, companyId: product.companyId, isDeleted: false, NOT: { id } }
+      });
+      if (existingBarcode) {
+        throw new BadRequestError(`Product with Barcode '${barcode}' already exists.`);
+      }
+    }
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
-        name, sku, barcode, description,
+        name: name || product.name,
+        sku: sku !== undefined ? sku : product.sku,
+        barcode: barcode !== undefined ? barcode : product.barcode,
+        description: description !== undefined ? description : product.description,
         categoryId: categoryId || null,
         brandId: brandId || null,
         unitId: unitId || null,
-        hsnCode,
-        gstRate: gstRate !== undefined ? parseFloat(gstRate) : undefined,
-        purchasePrice: purchasePrice !== undefined ? parseFloat(purchasePrice) : undefined,
-        salesPrice: salesPrice !== undefined ? parseFloat(salesPrice) : undefined,
-        lowStockThreshold: lowStockThreshold !== undefined ? parseFloat(lowStockThreshold) : undefined
+        hsnCode: hsnCode !== undefined ? hsnCode : product.hsnCode,
+        hsnCodeId: hsnCodeId || null,
+        gstRate: gstRate !== undefined ? parseFloat(gstRate) : product.gstRate,
+        gstSlabId: gstSlabId || null,
+        purchasePrice: purchasePrice !== undefined ? parseFloat(purchasePrice) : product.purchasePrice,
+        salesPrice: salesPrice !== undefined ? parseFloat(salesPrice) : product.salesPrice,
+        mrp: mrp !== undefined ? parseFloat(mrp) : product.mrp,
+        minPrice: minPrice !== undefined ? parseFloat(minPrice) : product.minPrice,
+        lowStockThreshold: lowStockThreshold !== undefined ? parseFloat(lowStockThreshold) : product.lowStockThreshold,
+        status: status || product.status,
+      },
+      include: {
+        category: true,
+        brand: true,
+        unit: true,
+        images: true,
+        hsnCodeRef: true,
+        gstSlab: true
       }
     });
 
@@ -487,7 +621,7 @@ export const updateProduct = async (req, res, next) => {
       userId: req.user.id,
       action: 'UPDATE_PRODUCT',
       module: 'PRODUCT',
-      details: { productId: updated.id },
+      details: { productId: updated.id, name: updated.name },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       companyId: product.companyId
@@ -504,25 +638,29 @@ export const deleteProduct = async (req, res, next) => {
     const { id } = req.params;
 
     const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) throw new NotFoundError('Product not found');
+    if (!product || product.isDeleted) throw new NotFoundError('Product not found');
 
     if (req.user.role !== 'SUPER_ADMIN' && product.companyId !== req.user.companyId) {
       throw new ForbiddenError('Access denied');
     }
 
-    await prisma.product.delete({ where: { id } });
+    // Soft delete only - keeps transaction logs intact!
+    await prisma.product.update({
+      where: { id },
+      data: { isDeleted: true, status: 'INACTIVE' }
+    });
 
     await logAudit({
       userId: req.user.id,
       action: 'DELETE_PRODUCT',
       module: 'PRODUCT',
-      details: { productId: id, name: product.name },
+      details: { productId: id, name: product.name, type: 'SOFT_DELETE' },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       companyId: product.companyId
     });
 
-    return successResponse(res, 'Product deleted successfully');
+    return successResponse(res, 'Product soft-deleted successfully');
   } catch (err) {
     next(err);
   }

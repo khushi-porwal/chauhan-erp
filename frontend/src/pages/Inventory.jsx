@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { inventoryApi, productApi, warehouseApi, companyApi } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
@@ -82,7 +82,9 @@ export default function Inventory() {
   const fetchProducts = async (companyId) => {
     try {
       const res = await productApi.getAll(companyId);
-      setProducts(res.data.data);
+      const data = res.data?.data;
+      const productList = Array.isArray(data) ? data : (data?.products || []);
+      setProducts(productList);
     } catch { /* ignore */ }
   };
 
@@ -127,14 +129,14 @@ export default function Inventory() {
     } catch { /* ignore */ }
   };
 
-  const loadAll = (companyId) => {
+  const loadAll = useCallback((companyId) => {
     fetchStockLevels(companyId);
     fetchWarehouses(companyId);
     fetchProducts(companyId);
     fetchLowStock(companyId);
     fetchHistory(companyId);
     fetchBatches(companyId);
-  };
+  }, [filterWarehouse]);
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -142,13 +144,13 @@ export default function Inventory() {
     } else {
       loadAll();
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, loadAll]);
 
   useEffect(() => {
     if (isSuperAdmin && selectedCompanyId) {
       loadAll(selectedCompanyId);
     }
-  }, [selectedCompanyId, isSuperAdmin]);
+  }, [selectedCompanyId, isSuperAdmin, loadAll]);
 
   // Refetch when filters change
   useEffect(() => {

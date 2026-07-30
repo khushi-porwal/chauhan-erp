@@ -351,3 +351,43 @@ export const resetPassword = async (req, res, next) => {
     next(err);
   }
 };
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id;
+
+    if (!currentPassword || !newPassword) {
+      throw new BadRequestError('Current password and new password are required');
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundError('User not found');
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new BadRequestError('Incorrect current password');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword }
+    });
+
+    await logAudit({
+      userId,
+      action: 'CHANGE_PASSWORD',
+      module: 'AUTH',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      companyId: user.companyId
+    });
+
+    return successResponse(res, 'Password updated successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+

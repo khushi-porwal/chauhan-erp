@@ -76,7 +76,8 @@ export default function Purchases() {
       const vendRes = await vendorApi.getAll();
       setVendors(vendRes.data.data);
       const prodRes = await productApi.getAll();
-      setProducts(prodRes.data.data);
+      const pData = prodRes.data?.data;
+      setProducts(Array.isArray(pData) ? pData : (pData?.products || []));
       const whRes = await warehouseApi.getAll();
       const activeWh = whRes.data.data.filter(w => w.status === 'ACTIVE');
       setWarehouses(activeWh);

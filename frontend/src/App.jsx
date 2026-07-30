@@ -13,7 +13,7 @@ import Branches from './pages/Branches.jsx';
 import FinancialYears from './pages/FinancialYears.jsx';
 import Users from './pages/Users.jsx';
 import AuditLogs from './pages/AuditLogs.jsx';
-import Settings from './pages/Settings.jsx';
+import SettingsPage from './pages/Settings.jsx';
 import Customers from './pages/Customers.jsx';
 import Vendors from './pages/Vendors.jsx';
 import Products from './pages/Products.jsx';
@@ -24,7 +24,13 @@ import Purchases from './pages/Purchases.jsx';
 import POS from './pages/POS.jsx';
 import Finance from './pages/Finance.jsx';
 import Reports from './pages/Reports.jsx';
-import { Menu, Building, Calendar, MapPin, User, LogOut } from 'lucide-react';
+import LowStock from './pages/LowStock.jsx';
+import BatchExpiry from './pages/BatchExpiry.jsx';
+import BarcodePrint from './pages/BarcodePrint.jsx';
+import TaxMaster from './pages/TaxMaster.jsx';
+import RolesPermissions from './pages/RolesPermissions.jsx';
+import NotificationBell from './components/NotificationBell.jsx';
+import { Menu, Building, MapPin, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // ── PROTECTED ROUTES WRAPPER ─────────────────────────────────
@@ -101,6 +107,11 @@ function AppLayout() {
     if (path === '/pos') return { title: 'Retail POS Terminal', sub: 'Barcode Billing & Receipt Printing' };
     if (path === '/finance') return { title: 'Financial Ledger', sub: 'Payments, Expenses & Books' };
     if (path === '/reports') return { title: 'Reports & Analytics', sub: 'Tax Liability & Profit Summary' };
+    if (path === '/low-stock') return { title: 'Low Stock Engine', sub: 'Automated Threshold Alerts & Restock' };
+    if (path === '/batch-expiry') return { title: 'Batch & Expiry Control', sub: 'Batch Numbers, Mfg & Expiry Tracking' };
+    if (path === '/barcode-print') return { title: 'Barcode Print Engine', sub: 'EAN-13 Generator & Label Sheets' };
+    if (path === '/tax-master') return { title: 'Tax Master', sub: 'HSN Codes & GST Slabs Setup' };
+    if (path === '/roles') return { title: 'Roles & Permissions', sub: 'Dynamic RBAC & Matrix Control' };
     return { title: 'Chauhan ERP', sub: 'Enterprise Management' };
   };
 
@@ -144,6 +155,14 @@ function AppLayout() {
                 </span>
               </div>
             )}
+
+            {/* Notification Bell */}
+            <NotificationBell />
+
+            {/* Settings Link */}
+            <Link to="/settings" className="btn btn-secondary btn-icon btn-sm" title="Settings">
+              <SettingsIcon size={14} />
+            </Link>
 
             <button className="btn btn-secondary btn-icon btn-sm" onClick={logout} title="Sign Out">
               <LogOut size={14} />
@@ -198,6 +217,10 @@ export default function App() {
 
               <Route element={<ProtectedRoute permission="inventory" />}>
                 <Route path="/inventory" element={<Inventory />} />
+                <Route path="/low-stock" element={<LowStock />} />
+                <Route path="/batch-expiry" element={<BatchExpiry />} />
+                <Route path="/barcode-print" element={<BarcodePrint />} />
+                <Route path="/tax-master" element={<TaxMaster />} />
               </Route>
 
               <Route element={<ProtectedRoute permission="sales" />}>
@@ -221,7 +244,7 @@ export default function App() {
               </Route>
 
               <Route element={<ProtectedRoute permission="settings" />}>
-                <Route path="/settings" element={<Settings />} />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
 
               <Route element={<ProtectedRoute permission="branches" />}>
@@ -236,6 +259,7 @@ export default function App() {
               <Route element={<ProtectedRoute adminOnly={true} />}>
                 <Route path="/companies" element={<Companies />} />
                 <Route path="/users" element={<Users />} />
+                <Route path="/roles" element={<RolesPermissions />} />
                 <Route path="/audit-logs" element={<AuditLogs />} />
               </Route>
             </Route>

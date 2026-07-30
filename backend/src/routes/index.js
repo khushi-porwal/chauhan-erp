@@ -12,6 +12,9 @@ import purchaseRoutes from './purchaseRoutes.js';
 import financeRoutes from './financeRoutes.js';
 import reportRoutes from './reportRoutes.js';
 import dispatchRoutes from './dispatchRoutes.js';
+import roleRoutes from './roleRoutes.js';
+import taxRoutes from './taxRoutes.js';
+import module1Routes from './module1Routes.js';
 
 const router = Router();
 
@@ -33,5 +36,8 @@ router.use('/purchases', purchaseRoutes);
 router.use('/finance', financeRoutes);
 router.use('/reports', reportRoutes);
 router.use('/dispatch', dispatchRoutes);
+router.use('/roles', roleRoutes);
+router.use('/taxes', taxRoutes);
+router.use('/m1', module1Routes);
 
 export default router;

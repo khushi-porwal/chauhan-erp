@@ -47,6 +47,11 @@ model Company {
   payments         Payment[]
   expenses         Expense[]
   dispatchNotes    DispatchNote[]
+  hsnCodes         HsnCode[]
+  gstSlabs         GstSlab[]
+  roles            Role[]
+  stockAdjustments StockAdjustment[]
+  notifications    Notification[]
 }
 
 model Branch {
@@ -104,9 +109,15 @@ model User {
   stockTransactions StockTransaction[]
   payments      Payment[]
   expenses      Expense[]
-  dispatches    DispatchNote[] @relation("DispatchCreatedBy")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  dispatches           DispatchNote[]    @relation("DispatchCreatedBy")
+  roleId               String?
+  roleRef              Role?             @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  stockAdjustments     StockAdjustment[]
+  notifications        Notification[]
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 }
 
 model RefreshToken {
@@ -257,21 +268,32 @@ model Product {
   brand        Brand?           @relation(fields: [brandId], references: [id], onDelete: SetNull)
   unitId       String?
   unit         Unit?            @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  hsnCode      String?
-  gstRate      Float            @default(0)
-  purchasePrice Float            @default(0)
-  salesPrice   Float            @default(0)
-  openingStock Float            @default(0)
-  currentStock Float            @default(0)
-  lowStockThreshold Float      @default(0)
-  companyId    String
-  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  variants     ProductVariant[]
-  stocks       WarehouseStock[]
-  batches      Batch[]
-  stockTransactions StockTransaction[]
-  quotationItems      QuotationItem[]
-  salesOrderItems     SalesOrderItem[]
+  hsnCode              String?
+  hsnCodeId            String?
+  hsnCodeRef           HsnCode?         @relation(fields: [hsnCodeId], references: [id], onDelete: SetNull)
+  gstRate              Float            @default(0)
+  gstSlabId            String?
+  gstSlab              GstSlab?         @relation(fields: [gstSlabId], references: [id], onDelete: SetNull)
+  purchasePrice        Float            @default(0)
+  salesPrice           Float            @default(0)
+  mrp                  Float            @default(0)
+  minPrice             Float            @default(0)
+  openingStock         Float            @default(0)
+  openingValue         Float            @default(0)
+  currentStock         Float            @default(0)
+  lowStockThreshold    Float            @default(0)
+  status               String           @default("ACTIVE") // ACTIVE, INACTIVE
+  isDeleted            Boolean          @default(false)
+  images               ProductImage[]
+  companyId            String
+  company              Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  variants             ProductVariant[]
+  stocks               WarehouseStock[]
+  batches              Batch[]
+  stockTransactions    StockTransaction[]
+  stockAdjustments     StockAdjustment[]
+  quotationItems       QuotationItem[]
+  salesOrderItems      SalesOrderItem[]
   deliveryChallanItems DeliveryChallanItem[]
   salesInvoiceItems    SalesInvoiceItem[]
   salesReturnItems     SalesReturnItem[]
@@ -279,8 +301,8 @@ model Product {
   purchaseInvoiceItems PurchaseInvoiceItem[]
   purchaseReturnItems  PurchaseReturnItem[]
   dispatchItems        DispatchItem[] @relation("DispatchItems")
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 }
 
 model ProductVariant {
@@ -310,6 +332,9 @@ model Warehouse {
   name                 String
   code                 String
   address              String?
+  managerName          String?
+  managerPhone         String?
+  warehouseType        String             @default("CENTRAL") // RETAIL, CENTRAL, TRANSIT, COLD_STORAGE
   branchId             String?
   branch               Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
   companyId            String
@@ -319,6 +344,7 @@ model Warehouse {
   batches              Batch[]
   incomingTransfers    StockTransaction[] @relation("ToWarehouse")
   outgoingTransfers    StockTransaction[] @relation("FromWarehouse")
+  stockAdjustments     StockAdjustment[]
   deliveryChallans     DeliveryChallan[]
   salesInvoices        SalesInvoice[]
   salesReturns         SalesReturn[]
@@ -379,6 +405,9 @@ model StockTransaction {
   toWarehouseId   String?
   toWarehouse     Warehouse? @relation("ToWarehouse", fields: [toWarehouseId], references: [id], onDelete: SetNull)
   quantity        Float
+  quantityBefore  Float    @default(0)
+  quantityAfter   Float    @default(0)
+  reason          String?
   description     String?
   batchNumber     String?
   createdById     String?
@@ -792,3 +821,97 @@ model DispatchItem {
   description    String?
   createdAt      DateTime      @default(now())
 }
+
+// ── Module 1: Roles, Permissions, Tax & Adjustments ─────────
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   // SUPER_ADMIN, COMPANY_ADMIN, BRANCH_MANAGER, CASHIER, STAFF, or custom
+  description String?
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions Json     @default("[]") // Array of permission strings
+  isSystem    Boolean  @default(false)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique // e.g. "products.read", "products.create"
+  name        String
+  module      String   // PRODUCTS, INVENTORY, CATEGORIES, BRANDS, UNITS, WAREHOUSES, BARCODE, USERS, ROLES
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model HsnCode {
+  id          String    @id @default(uuid())
+  code        String
+  description String?
+  gstRate     Float     @default(0)
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([companyId, code])
+}
+
+model GstSlab {
+  id          String    @id @default(uuid())
+  name        String    // e.g. GST 18%, Exempt, 5%
+  rate        Float
+  description String?
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([companyId, name])
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model StockAdjustment {
+  id           String     @id @default(uuid())
+  adjustmentNo String     @unique
+  warehouseId  String
+  warehouse    Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId    String?
+  batchNumber  String?
+  type         String     // INCREASE, DECREASE
+  quantity     Float
+  reason       String
+  createdById  String?
+  createdBy    User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("SYSTEM") // LOW_STOCK, EXPIRY_WARNING, SYSTEM
+  isRead    Boolean  @default(false)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+

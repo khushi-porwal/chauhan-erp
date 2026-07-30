@@ -3,12 +3,12 @@ import { productApi, companyApi } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   Package, Plus, Edit3, Trash2, X, Save, Tag, Layers, Ruler, Barcode,
-  Search, Filter, ChevronDown, ChevronRight, GitBranch, AlertTriangle, Printer, Wand2, RefreshCw
+  Search, Filter, GitBranch, AlertTriangle, Printer, Wand2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Products() {
-  const { user, isSuperAdmin } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
@@ -75,10 +75,11 @@ export default function Products() {
         productApi.getBrands(companyId),
         productApi.getUnits(companyId),
       ]);
-      setProducts(pRes.data.data);
-      setCategories(cRes.data.data);
-      setBrands(bRes.data.data);
-      setUnits(uRes.data.data);
+      const pData = pRes.data?.data;
+      setProducts(Array.isArray(pData) ? pData : (pData?.products || []));
+      setCategories(cRes.data?.data || []);
+      setBrands(bRes.data?.data || []);
+      setUnits(uRes.data?.data || []);
     } catch {
       toast.error('Failed to load product data');
     } finally {

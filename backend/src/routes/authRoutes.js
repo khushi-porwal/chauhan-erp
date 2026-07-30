@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { login, logout, refreshToken, forgotPassword, resetPassword, register } from '../controllers/authController.js';
+import { login, logout, refreshToken, forgotPassword, resetPassword, register, changePassword } from '../controllers/authController.js';
+import { authenticate } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validator.js';
 
 const router = Router();
@@ -47,4 +48,16 @@ router.post(
   resetPassword
 );
 
+router.post(
+  '/change-password',
+  authenticate,
+  [
+    body('currentPassword').notEmpty().withMessage('Current password is required'),
+    body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters long'),
+  ],
+  validateRequest,
+  changePassword
+);
+
 export default router;
+
