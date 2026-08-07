@@ -8,7 +8,6 @@
     "frontend"
   ],
   "scripts": {
-    "prepare": "husky",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend"
