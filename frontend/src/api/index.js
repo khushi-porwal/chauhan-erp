@@ -105,6 +105,8 @@ export const inventoryApi = {
   createBatch: (data) => api.post('/inventory/batches', data),
   deleteBatch: (id) => api.delete(`/inventory/batches/${id}`),
   reconcile: (data) => api.post('/inventory/reconcile', data),
+  exportCSV: (params) => api.get('/inventory/export-csv', { params, responseType: 'blob' }),
+  exportPDF: (params) => api.get('/inventory/export-pdf', { params, responseType: 'blob' }),
 };
 
 // ── Sales ────────────────────────────────────────────────────
@@ -123,14 +125,29 @@ export const salesApi = {
 
 // ── Purchases ────────────────────────────────────────────────
 export const purchaseApi = {
+  // Requisitions
+  getRequisitions: (companyId) => api.get('/purchases/requisitions', { params: companyId ? { companyId } : {} }),
+  createRequisition: (data) => api.post('/purchases/requisitions', data),
+  updateRequisitionStatus: (id, data) => api.put(`/purchases/requisitions/${id}/status`, data),
+  convertRequisitionToPO: (id, data) => api.post(`/purchases/requisitions/${id}/convert-to-po`, data),
+  // Purchase Orders
   getOrders: (companyId) => api.get('/purchases/orders', { params: companyId ? { companyId } : {} }),
+  getOrderById: (id) => api.get(`/purchases/orders/${id}`),
   createOrder: (data) => api.post('/purchases/orders', data),
   updateOrderStatus: (id, data) => api.put(`/purchases/orders/${id}/status`, data),
+  approveOrder: (id, data) => api.post(`/purchases/orders/${id}/approve`, data),
   convertOrderToInvoice: (id, data) => api.post(`/purchases/orders/${id}/convert`, data),
   receiveOrder: (id, data) => api.post(`/purchases/orders/${id}/receive`, data),
+  partialReceiveOrder: (id, data) => api.post(`/purchases/orders/${id}/receive-partial`, data),
+  getOrderPdf: (id) => api.get(`/purchases/orders/${id}/pdf`, { responseType: 'blob' }),
+  // Vendor History & Ledger
   getVendorHistory: (vendorId, companyId) => api.get(`/purchases/vendors/${vendorId}/history`, { params: companyId ? { companyId } : {} }),
+  getVendorLedger: (vendorId, companyId) => api.get(`/purchases/vendors/${vendorId}/ledger`, { params: companyId ? { companyId } : {} }),
+  // Purchase Invoices
   getInvoices: (companyId) => api.get('/purchases/invoices', { params: companyId ? { companyId } : {} }),
   createInvoice: (data) => api.post('/purchases/invoices', data),
+  payInvoice: (id, data) => api.post(`/purchases/invoices/${id}/pay`, data),
+  // Purchase Returns
   getReturns: (companyId) => api.get('/purchases/returns', { params: companyId ? { companyId } : {} }),
   createReturn: (data) => api.post('/purchases/returns', data),
 };

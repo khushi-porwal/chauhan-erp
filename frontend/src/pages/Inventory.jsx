@@ -5,7 +5,8 @@ import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
 import {
   Boxes, Plus, AlertTriangle, History,
   ArrowRightLeft, ArrowDown, ArrowUp, RefreshCw, X, Save,
-  Layers, Tag, Trash2, Search, CheckCircle2, ClipboardCheck, Barcode
+  Layers, Tag, Trash2, Search, CheckCircle2, ClipboardCheck, Barcode,
+  Download, FileText, ChevronLeft, ChevronRight, Warehouse, DollarSign
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -28,6 +29,9 @@ export default function Inventory() {
   // Filters & Search
   const [filterWarehouse, setFilterWarehouse] = useState('');
   const [filterProduct, setFilterProduct] = useState('');
+  const [stockSearch, setStockSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [batchSearch, setBatchSearch] = useState('');
   const [historySearch, setHistorySearch] = useState('');
 
@@ -319,6 +323,65 @@ export default function Inventory() {
     );
   });
 
+  const handleExportCSV = async () => {
+    try {
+      const params = {};
+      if (isSuperAdmin && selectedCompanyId) params.companyId = selectedCompanyId;
+      if (filterWarehouse) params.warehouseId = filterWarehouse;
+      const res = await inventoryApi.exportCSV(params);
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `inventory_stocks_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Stock levels exported to CSV');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to export CSV');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const params = {};
+      if (isSuperAdmin && selectedCompanyId) params.companyId = selectedCompanyId;
+      if (filterWarehouse) params.warehouseId = filterWarehouse;
+      const res = await inventoryApi.exportPDF(params);
+      const blob = new Blob([res.data], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => printWindow.print();
+      }
+      toast.success('Print preview opened for Stock PDF report');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to export PDF');
+    }
+  };
+
+  const totalStockValue = stocks.reduce((sum, item) => {
+    const price = item.product?.purchasePrice || item.product?.salesPrice || 0;
+    return sum + (price * item.quantity);
+  }, 0);
+
+  const filteredStocks = stocks.filter((s) => {
+    const query = stockSearch.toLowerCase();
+    const matchesWarehouse = !filterWarehouse || s.warehouseId === filterWarehouse;
+    const matchesProduct = !filterProduct || s.productId === filterProduct;
+    const matchesSearch = !query ||
+      s.product?.name?.toLowerCase().includes(query) ||
+      s.product?.sku?.toLowerCase().includes(query) ||
+      s.product?.barcode?.toLowerCase().includes(query) ||
+      s.warehouse?.name?.toLowerCase().includes(query);
+    return matchesWarehouse && matchesProduct && matchesSearch;
+  });
+
+  const totalPages = Math.ceil(filteredStocks.length / itemsPerPage) || 1;
+  const paginatedStocks = filteredStocks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   const filteredHistory = history.filter(h => {
     const query = historySearch.toLowerCase();
     return (
@@ -352,6 +415,49 @@ export default function Inventory() {
           <button className="btn btn-primary flex-center" onClick={() => openTxModal('STOCK_ADJUSTMENT')}>
             <Boxes size={14} /> Adjust Count
           </button>
+        </div>
+      </div>
+
+      {/* Metrics Dashboard Bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-4)' }}>
+        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div style={{ padding: '10px', background: 'rgba(59, 130, 246, 0.15)', borderRadius: 'var(--radius-md)', color: '#3b82f6' }}>
+            <Boxes size={20} />
+          </div>
+          <div>
+            <p className="text-muted text-xs font-medium">Total Item Stock</p>
+            <h3 className="text-primary font-bold" style={{ fontSize: '1.25rem' }}>{stocks.reduce((acc, s) => acc + (s.quantity || 0), 0)}</h3>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div style={{ padding: '10px', background: 'rgba(16, 185, 129, 0.15)', borderRadius: 'var(--radius-md)', color: '#10b981' }}>
+            <DollarSign size={20} />
+          </div>
+          <div>
+            <p className="text-muted text-xs font-medium">Est. Stock Valuation</p>
+            <h3 className="text-primary font-bold" style={{ fontSize: '1.25rem' }}>₹{totalStockValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h3>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div style={{ padding: '10px', background: 'rgba(245, 158, 11, 0.15)', borderRadius: 'var(--radius-md)', color: '#f59e0b' }}>
+            <AlertTriangle size={20} />
+          </div>
+          <div>
+            <p className="text-muted text-xs font-medium">Low Stock Alerts</p>
+            <h3 className="text-warning font-bold" style={{ fontSize: '1.25rem' }}>{lowStock.length} Items</h3>
+          </div>
+        </div>
+
+        <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div style={{ padding: '10px', background: 'rgba(168, 85, 247, 0.15)', borderRadius: 'var(--radius-md)', color: '#a855f7' }}>
+            <Warehouse size={20} />
+          </div>
+          <div>
+            <p className="text-muted text-xs font-medium">Active Warehouses</p>
+            <h3 className="text-primary font-bold" style={{ fontSize: '1.25rem' }}>{warehouses.length} Outlets</h3>
+          </div>
         </div>
       </div>
 
@@ -436,87 +542,107 @@ export default function Inventory() {
       {/* Tab: Stock Levels */}
       {activeTab === 'levels' && (
         <>
-          <div className="card grid-3" style={{ padding: 'var(--space-4)', gridTemplateColumns: '1fr 1fr auto' }}>
-            <div className="form-group">
-              <label className="form-label">Filter Warehouse</label>
-              <select
-                className="form-select"
-                value={filterWarehouse}
-                onChange={(e) => setFilterWarehouse(e.target.value)}
-              >
-                <option value="">All Warehouses</option>
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
-                ))}
-              </select>
-            </div>
+          <div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+                <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ paddingLeft: '34px' }}
+                  placeholder="Search product, SKU or barcode..."
+                  value={stockSearch}
+                  onChange={(e) => { setStockSearch(e.target.value); setCurrentPage(1); }}
+                />
+              </div>
 
-            <div className="form-group">
-              <label className="form-label">Search Product Catalog</label>
-              <select
-                className="form-select"
-                value={filterProduct}
-                onChange={(e) => setFilterProduct(e.target.value)}
-              >
-                <option value="">All Products</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>
-                ))}
-              </select>
-            </div>
+              <div style={{ width: '180px' }}>
+                <select
+                  className="form-select"
+                  value={filterWarehouse}
+                  onChange={(e) => { setFilterWarehouse(e.target.value); setCurrentPage(1); }}
+                >
+                  <option value="">All Warehouses</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name} ({w.code})</option>
+                  ))}
+                </select>
+              </div>
 
-            <button
-              className="btn btn-secondary flex-center"
-              style={{ alignSelf: 'flex-end', height: '38px' }}
-              onClick={() => { setFilterWarehouse(''); setFilterProduct(''); }}
-            >
-              <RefreshCw size={14} /> Reset Filters
-            </button>
+              <div style={{ width: '180px' }}>
+                <select
+                  className="form-select"
+                  value={filterProduct}
+                  onChange={(e) => { setFilterProduct(e.target.value); setCurrentPage(1); }}
+                >
+                  <option value="">All Products</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} {p.sku ? `(${p.sku})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                className="btn btn-secondary flex-center"
+                onClick={() => { setFilterWarehouse(''); setFilterProduct(''); setStockSearch(''); setCurrentPage(1); }}
+                title="Reset Filters"
+              >
+                <RefreshCw size={14} /> Reset
+              </button>
+
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-2)' }}>
+                <button className="btn btn-secondary flex-center" onClick={handleExportCSV} title="Export Stock Data to CSV">
+                  <Download size={14} className="text-success" /> Export CSV
+                </button>
+                <button className="btn btn-secondary flex-center" onClick={handleExportPDF} title="Export Printable PDF Report">
+                  <FileText size={14} className="text-info" /> Export PDF
+                </button>
+              </div>
+            </div>
           </div>
 
           {loading ? (
             <div style={{ padding: 'var(--space-8)', textAlign: 'center', color: 'var(--text-muted)' }}>Loading stock quantities...</div>
-          ) : stocks.length === 0 ? (
+          ) : filteredStocks.length === 0 ? (
             <div className="card flex-center" style={{ padding: 'var(--space-10)', flexDirection: 'column', gap: 'var(--space-3)' }}>
               <Boxes size={48} style={{ color: 'var(--text-muted)' }} />
-              <h3 className="text-secondary">No Stocks Recorded</h3>
-              <p className="text-muted text-sm">Perform a stock-in transaction to populate warehouse counts</p>
+              <h3 className="text-secondary">No Matching Stock Found</h3>
+              <p className="text-muted text-sm">Perform a stock-in transaction or adjust filter parameters</p>
               <button className="btn btn-primary" onClick={() => openTxModal('STOCK_IN')}>
                 Stock In
               </button>
             </div>
           ) : (
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product Details</th>
-                    <th>Warehouse Location</th>
-                    <th>Stock Count (Qty)</th>
-                    <th>SKU / Barcode</th>
-                    <th>Overall Total Stock</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stocks
-                    .filter((s) => !filterProduct || s.productId === filterProduct)
-                    .map((stock) => (
+            <>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Product Details</th>
+                      <th>Warehouse Location</th>
+                      <th>Stock Count (Qty)</th>
+                      <th>SKU / Barcode</th>
+                      <th>Overall Total Stock</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedStocks.map((stock) => (
                       <tr key={stock.id}>
                         <td>
-                          <span className="font-semibold text-primary">{stock.product.name}</span>
+                          <span className="font-semibold text-primary">{stock.product?.name}</span>
                           {stock.variant && <span className="text-xs text-muted"> ({stock.variant.name})</span>}
                         </td>
                         <td>
                           <span className="alert-info" style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: '10px', fontWeight: '500' }}>
-                            {stock.warehouse.name} ({stock.warehouse.code})
+                            {stock.warehouse?.name} ({stock.warehouse?.code})
                           </span>
                         </td>
                         <td className="font-semibold text-primary">{stock.quantity}</td>
                         <td className="text-xs text-secondary">
-                          {stock.product.sku || '-'} {stock.product.barcode ? `/ ${stock.product.barcode}` : ''}
+                          {stock.product?.sku || '-'} {stock.product?.barcode ? `/ ${stock.product.barcode}` : ''}
                         </td>
-                        <td className="text-secondary">{stock.product.currentStock}</td>
+                        <td className="text-secondary">{stock.product?.currentStock}</td>
                         <td>
                           <button
                             className="btn btn-secondary btn-sm flex-center"
@@ -528,9 +654,50 @@ export default function Inventory() {
                         </td>
                       </tr>
                     ))}
-                </tbody>
-              </table>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              <div className="flex-between" style={{ padding: 'var(--space-3)', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <div className="text-xs text-secondary">
+                  Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredStocks.length)} of {filteredStocks.length} entries
+                </div>
+
+                <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                  <span className="text-xs text-secondary">Items per page:</span>
+                  <select
+                    className="form-select"
+                    style={{ width: '70px', padding: '2px 6px', fontSize: '12px' }}
+                    value={itemsPerPage}
+                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+
+                  <button
+                    className="btn btn-secondary btn-sm btn-icon"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="text-xs font-semibold text-primary" style={{ padding: '0 8px' }}>
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    className="btn btn-secondary btn-sm btn-icon"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </>
       )}

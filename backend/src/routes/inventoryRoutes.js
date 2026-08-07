@@ -11,7 +11,9 @@ import {
   createBatch,
   getBatches,
   deleteBatch,
-  reconcileStock
+  reconcileStock,
+  exportStockCSV,
+  exportStockPDF
 } from '../controllers/inventoryController.js';
 import { authenticate, checkPermission } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validator.js';
@@ -74,6 +76,8 @@ router.post(
 router.get('/stocks', getWarehouseStock);
 router.get('/low-stock', getLowStockAlerts);
 router.get('/history', getStockHistory);
+router.get('/export-csv', exportStockCSV);
+router.get('/export-pdf', exportStockPDF);
 
 // Batches
 router.post(

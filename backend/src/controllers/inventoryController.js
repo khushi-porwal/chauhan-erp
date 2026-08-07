@@ -460,7 +460,7 @@ export const getWarehouseStock = async (req, res, next) => {
       where,
       include: {
         warehouse: { select: { name: true, code: true } },
-        product: { select: { name: true, sku: true, barcode: true, currentStock: true } },
+        product: { select: { name: true, sku: true, barcode: true, currentStock: true, purchasePrice: true, salesPrice: true } },
         variant: { select: { name: true, sku: true } }
       },
       orderBy: { product: { name: 'asc' } }
@@ -729,3 +729,146 @@ export const reconcileStock = async (req, res, next) => {
     next(err);
   }
 };
+
+// ── CSV Export ───────────────────────────────────────────────
+export const exportStockCSV = async (req, res, next) => {
+  try {
+    const { warehouseId } = req.query;
+    const companyId = req.user.role === 'SUPER_ADMIN' ? req.query.companyId : req.user.companyId;
+
+    const where = {};
+    if (warehouseId) where.warehouseId = warehouseId;
+    if (companyId) where.companyId = companyId;
+
+    const stocks = await prisma.warehouseStock.findMany({
+      where,
+      include: {
+        warehouse: { select: { name: true, code: true } },
+        product: { select: { name: true, sku: true, barcode: true, purchasePrice: true, salesPrice: true } },
+        variant: { select: { name: true, sku: true } }
+      },
+      orderBy: { product: { name: 'asc' } }
+    });
+
+    const headers = ['Warehouse Code', 'Warehouse Name', 'Product Name', 'SKU', 'Barcode', 'Quantity', 'Valuation (Est. Cost)'];
+    const rows = stocks.map(s => {
+      const productName = s.variant ? `${s.product?.name} (${s.variant.name})` : (s.product?.name || 'N/A');
+      const sku = s.variant?.sku || s.product?.sku || 'N/A';
+      const barcode = s.product?.barcode || 'N/A';
+      const qty = s.quantity || 0;
+      const estCost = ((s.product?.purchasePrice || 0) * qty).toFixed(2);
+      return [
+        `"${s.warehouse?.code || ''}"`,
+        `"${s.warehouse?.name || ''}"`,
+        `"${productName.replace(/"/g, '""')}"`,
+        `"${sku}"`,
+        `"${barcode}"`,
+        qty,
+        estCost
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    await logAudit({
+      userId: req.user.id,
+      action: 'EXPORT_STOCK_CSV',
+      module: 'INVENTORY',
+      details: { warehouseId, count: stocks.length },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      companyId
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="inventory_stock_levels.csv"');
+    return res.status(200).send(csvContent);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── PDF Export ───────────────────────────────────────────────
+export const exportStockPDF = async (req, res, next) => {
+  try {
+    const { warehouseId } = req.query;
+    const companyId = req.user.role === 'SUPER_ADMIN' ? req.query.companyId : req.user.companyId;
+
+    const where = {};
+    if (warehouseId) where.warehouseId = warehouseId;
+    if (companyId) where.companyId = companyId;
+
+    const stocks = await prisma.warehouseStock.findMany({
+      where,
+      include: {
+        warehouse: { select: { name: true, code: true } },
+        product: { select: { name: true, sku: true, barcode: true } },
+        variant: { select: { name: true, sku: true } }
+      },
+      orderBy: { product: { name: 'asc' } }
+    });
+
+    const htmlReport = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Stock Inventory Report</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 24px; color: #1e293b; }
+    h1 { font-size: 22px; color: #0f172a; margin-bottom: 4px; }
+    p { font-size: 13px; color: #64748b; margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #cbd5e1; padding: 10px 14px; font-size: 13px; text-align: left; }
+    th { background-color: #f1f5f9; font-weight: 600; color: #334155; }
+    tr:nth-child(even) { background-color: #f8fafc; }
+    .text-right { text-align: right; }
+    .badge { background: #e2e8f0; padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h1>Chauhan ERP — Inventory Stock Report</h1>
+  <p>Generated on: ${new Date().toLocaleString()}</p>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Warehouse</th>
+        <th>Product Name</th>
+        <th>SKU</th>
+        <th>Barcode</th>
+        <th class="text-right">Quantity</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${stocks.map((s, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${s.warehouse?.name} (<span class="badge">${s.warehouse?.code}</span>)</td>
+          <td>${s.variant ? `${s.product?.name} (${s.variant.name})` : s.product?.name}</td>
+          <td>${s.variant?.sku || s.product?.sku || '-'}</td>
+          <td>${s.product?.barcode || '-'}</td>
+          <td class="text-right"><strong>${s.quantity}</strong></td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+    await logAudit({
+      userId: req.user.id,
+      action: 'EXPORT_STOCK_PDF',
+      module: 'INVENTORY',
+      details: { warehouseId, count: stocks.length },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      companyId
+    });
+
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', 'inline; filename="inventory_stock_levels.html"');
+    return res.status(200).send(htmlReport);
+  } catch (err) {
+    next(err);
+  }
+};
+
